@@ -2,15 +2,15 @@
 <html>
 <head lang="en">
     <meta charset="UTF-8">
-    <title>1 przez x</title>
+    <title>pierwiastek z x</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.95.3/css/materialize.min.css">
     <link rel="stylesheet" href="style.css"/>
 </head>
 <body ng-app="app">
 
-    <div class="container" ng-controller="oblicz1przezx">
-
-        <h4>Program wylicza 1/x</h4>
+    <div class="container" ng-controller="obliczPierw">
+        <h1>Zle dziala</h1>
+        <h4>Program wylicza &radic;x</h4>
         <div class="input-field"><input id="potega" type="number" ng-model="a"/><label for="potega">Podaj x</label></div>
         <div class="input-field"><input id="blad" type="number" ng-model="b"/><label for="blad">Podaj blad</label></div>
 
@@ -18,12 +18,12 @@
 
         <p></p>
         <p ng-repeat="i in kolejneKroki">y<sub>{{$index+1}}</sub> = <span class="wynik">{{i}}</span></p>
-        <p ng-show="wynik">1/x = <span class="suma">{{wynik}}</span></p>
+        <p ng-show="wynik">&radic;x = <span class="suma">{{wynik}}</span></p>
 
         <fieldset>
             <legend>Informacje</legend>
-            <span class="wynik">Kroki 1/x</span><br />
-            <span class="suma">Wynik 1/x</span>
+            <span class="wynik">Kroki &radic;x</span><br />
+            <span class="suma">Wynik &radic;x</span>
 
         </fieldset>
 
