@@ -24,7 +24,6 @@ window.onload = () => {
 
     // Zmiene algorytmu
     let population = 20,
-    desireSolution = 0,
     employed = Array(population),
     onlooker = Array(population),
     scout = Array(population),
@@ -118,13 +117,9 @@ window.onload = () => {
             } else {
                 scout[i] = scout[i] + 1;
             }
-
-        }
-
-        // Wyrysowanie na ekran 
-        for(let i=0;i<employed.length;i++) {
             DrawEmployed(employed[i]);
         }
+
     }
 
     let OnlookerPhase = () => {
@@ -152,11 +147,7 @@ window.onload = () => {
             }
             onlooker[i].PositionX = ChoosenEmployed.PositionX;
             onlooker[i].PositionY = ChoosenEmployed.PositionY;
-        }
-        
-        
-        // Wyrysowanie na ekran
-        for(let i=0;i<onlooker.length;i++) {
+            
             DrawOnlooker(onlooker[i]);
         }
     }
@@ -188,7 +179,6 @@ window.onload = () => {
     let Reset = () => {
         window.cancelAnimationFrame(animationId);
         population = parseInt( document.getElementById("populationNumber").value);
-        desireSolution = 0;
         employed = Array(population);
         onlooker = Array(population);
         scout = Array(population);
