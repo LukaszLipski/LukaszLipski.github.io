@@ -48,7 +48,8 @@ window.onload = () => {
     let DrawOnlooker = (bee) => {
         ctx.beginPath();
         ctx.arc(bee.PositionX, bee.PositionY, 7, 0, 2 * Math.PI, false);
-        ctx.fillStyle = 'blue';
+        //ctx.fillStyle = 'blue';
+        ctx.fillStyle = "rgba(41, 98, 255, 0.5)";
         ctx.fill();
         ctx.lineWidth = 1;
         ctx.strokeStyle = '#003300';
@@ -98,14 +99,17 @@ window.onload = () => {
             
             let tmpBee = new Bee();
             let phi;
-            while(tmpBee.PositionX < 0 || tmpBee.PositionX > width) {
-                phi = -a + (a + a) * Math.random();
-                tmpBee.PositionX = employed[i].PositionX + ( phi*( employed[i].PositionX - employed[k].PositionX ) );
-            }
-            while(tmpBee.PositionY < 0 || tmpBee.PositionY > height) {
-                phi = -a + (a + a) * Math.random();
-                tmpBee.PositionY = employed[i].PositionY + ( phi*( employed[i].PositionY - employed[k].PositionY ) );
-            }
+            
+            phi = -a + ((a + a) * Math.random());
+            tmpBee.PositionX = employed[i].PositionX + ( phi*( employed[i].PositionX - employed[k].PositionX ) );
+            if(tmpBee.PositionX < 0) tmpBee.PositionX = 0;
+            if(tmpBee.PositionX > width) tmpBee.PositionX = width;
+        
+            phi = -a + ((a + a) * Math.random());
+            tmpBee.PositionY = employed[i].PositionY + ( phi*( employed[i].PositionY - employed[k].PositionY ) );
+            if(tmpBee.PositionY < 0) tmpBee.PositionY = 0;
+            if(tmpBee.PositionY > height) tmpBee.PositionY = height;
+        
             tmpBee.Nectar = FitnessFunction(tmpBee);
             if(tmpBee.Nectar >= employed[i].Nectar) {
                 employed[i].PositionX = tmpBee.PositionX;
