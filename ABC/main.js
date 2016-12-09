@@ -148,6 +148,24 @@ window.onload = () => {
             onlooker[i].PositionX = ChoosenEmployed.PositionX;
             onlooker[i].PositionY = ChoosenEmployed.PositionY;
             
+            // neighbourhood source
+            let k = Math.floor(Math.random() * population);
+            while(i==k) {
+                k = Math.floor(Math.random() * population);
+            }
+            let phi = -a + ((a + a) * Math.random());
+            onlooker[i].PositionX = onlooker[i].PositionX + ( phi*( onlooker[i].PositionX - employed[k].PositionX ) );
+            if(onlooker[i].PositionX < 0) onlooker[i].PositionX = 0;
+            if(onlooker[i].PositionX > width) onlooker[i].PositionX = width;
+        
+            phi = -a + ((a + a) * Math.random());
+            onlooker[i].PositionY = onlooker[i].PositionY + ( phi*( onlooker[i].PositionY - employed[k].PositionY ) );
+            if(onlooker[i].PositionY < 0) onlooker[i].PositionY = 0;
+            if(onlooker[i].PositionY > height) onlooker[i].PositionY = height;
+        
+            onlooker[i].Nectar = FitnessFunction(onlooker[i]);
+
+
             DrawOnlooker(onlooker[i]);
         }
     }
@@ -187,11 +205,14 @@ window.onload = () => {
         if(maxIteration == "")
             maxIteration = 100;
         employedChances = document.getElementById("chances").value;
-        if (employedChances == "")
+        if (employedChances == ""){
             employedChances = 10;
-        a = document.getElementById("aNumber").value;
-        if (a == "")
+        }
+        a = parseFloat(document.getElementById("aNumber").value);
+        if (a == NaN) {
             a = 1;
+        }
+        console.log(employedChances);
         globalBestSolutionX = Infinity;
         globalBestSolutionY = Infinity;
         Init();
