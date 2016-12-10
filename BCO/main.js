@@ -31,6 +31,11 @@ window.onload = () => {
     maxIteration = 100,
     indexOfHigestNectar = 0,
     indexOfLowestNectar = 0,
+    lBoundryX = -width/2,
+    uBoundryX = width/2,
+    lBoundryY = -height/2,
+    uBoundryY = height/2,
+    velocity = 20,
     globalBestSolutionX = Infinity,
     globalBestSolutionY = Infinity;
 
@@ -54,12 +59,29 @@ window.onload = () => {
         ctx.stroke();
     }
 
+    let DrawLines = () => {
+        ctx.beginPath();
+        ctx.moveTo(-width/2,0);
+        ctx.lineTo(width/2,0);
+        ctx.strokeStyle = '#000000';
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0,-height/2);
+        ctx.lineTo(0,height/2);
+        ctx.strokeStyle = '#000000';
+        ctx.stroke();
+    }
+
     // funkcja sprawdzania fitnessu
     let FitnessFunction = (bee) => {
-        if(bee.PositionX + bee.PositionY >= 0) {
-            return 1/(1+bee.PositionX + bee.PositionY);
+        if(bee.PositionX >= 0 && bee.PositionY >= 0) {
+            return 1/(1+Math.abs(bee.PositionX + bee.PositionY));
+        } else if (bee.PositionX >= 0 && bee.PositionY < 0){
+            return 1/(1+Math.abs(bee.PositionX - bee.PositionY));
+        } else if (bee.PositionX < 0 && bee.PositionY >= 0){
+            return 1/(1+Math.abs(bee.PositionX - bee.PositionY));
         } else {
-            return 1 + Math.abs(bee.PositionX + bee.PositionY);
+            return 1/(1+Math.abs(bee.PositionX + bee.PositionY));
         }
     }
 
@@ -67,28 +89,26 @@ window.onload = () => {
     let Init = () => {
         for(let i=0;i<employed.length;i++) {
             employed[i] = new Bee();
-            employed[i].PositionX = Math.random() * width;
-            employed[i].PositionY = Math.random() * height;
+            employed[i].PositionX = lBoundryX + Math.random() * (uBoundryX - lBoundryX);
+            employed[i].PositionY = lBoundryY + Math.random() * (uBoundryY - lBoundryY);
             employed[i].Nectar = FitnessFunction(employed[i]);
         }
     }
 
     let ForwardPass = () => {
     
-        let velocity = 10;
+        
         for(let i=0;i<employed.length;i++) {
 
-            let phi;
-            
-            phi = -velocity + (velocity + velocity) * Math.random();
+            let phi = -velocity + (velocity + velocity) * Math.random();
             employed[i].PositionX = employed[i].PositionX + ( phi );
-            if(employed[i].PositionX < 0) employed[i].PositionX = 0;
-            if(employed[i].PositionX > width) employed[i].PositionX = width;
+            if(employed[i].PositionX < lBoundryX) employed[i].PositionX = lBoundryX;
+            if(employed[i].PositionX > uBoundryX) employed[i].PositionX = uBoundryX;
 
             phi = -velocity + (velocity + velocity) * Math.random();
             employed[i].PositionY = employed[i].PositionY + ( phi );
-            if(employed[i].PositionY < 0) employed[i].PositionY = 0;
-            if(employed[i].PositionY > height) employed[i].PositionY = height;
+            if(employed[i].PositionY < lBoundryY) employed[i].PositionY = lBoundryY;
+            if(employed[i].PositionY > uBoundryY) employed[i].PositionY = uBoundryY;
 
             employed[i].Nectar = FitnessFunction(employed[i]);
             if(employed[indexOfHigestNectar].Nectar <= employed[i].Nectar){
@@ -178,8 +198,14 @@ window.onload = () => {
         uncommited = Array(0);
         indexOfHigestNectar = 0;
         maxIteration = document.getElementById("maxIteration").value;
-        if(maxIteration == "")
+        if(maxIteration == ""){
             maxIteration = 100;
+        }
+        velocity = document.getElementById("velocity").value;
+        if(velocity == ""){
+            velocity = 10;
+        }
+        velocity = Math.abs(velocity);
         globalBestSolutionX = Infinity;
         globalBestSolutionY = Infinity;
         Init();
@@ -196,7 +222,8 @@ window.onload = () => {
 
         if(timer >= beeSpeed){
             if(isRunning && maxIteration > 0){
-                ctx.clearRect(0,0,width,height);
+                ctx.clearRect(lBoundryX,lBoundryY,width,height);
+                DrawLines();
                 ForwardPass();
                 BackwardPass();
                 UpdateGlobalPhase();
@@ -214,7 +241,7 @@ window.onload = () => {
     animationId = document.getElementById("resetBtn").onclick = Reset;
 
 
-
+    ctx.translate(width/2,height/2);
     Init();
     window.requestAnimationFrame(Update);
     //setInterval( Update, 500);

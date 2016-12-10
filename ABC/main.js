@@ -31,6 +31,10 @@ window.onload = () => {
     maxIteration = 100,
     employedChances = 10,
     a = 1,
+    lBoundryX = -width/2,
+    uBoundryX = width/2,
+    lBoundryY = -height/2,
+    uBoundryY = height/2,
     globalBestSolutionX = Infinity,
     globalBestSolutionY = Infinity;
 
@@ -65,12 +69,29 @@ window.onload = () => {
         ctx.stroke();
     }
 
+    let DrawLines = () => {
+        ctx.beginPath();
+        ctx.moveTo(-width/2,0);
+        ctx.lineTo(width/2,0);
+        ctx.strokeStyle = '#000000';
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0,-height/2);
+        ctx.lineTo(0,height/2);
+        ctx.strokeStyle = '#000000';
+        ctx.stroke();
+    }
+
     // funkcja sprawdzania fitnessu
     let FitnessFunction = (bee) => {
-        if(bee.PositionX + bee.PositionY >= 0) {
-            return 1/(1+bee.PositionX + bee.PositionY);
+        if(bee.PositionX >= 0 && bee.PositionY >= 0) {
+            return 1/(1+Math.abs(bee.PositionX + bee.PositionY));
+        } else if (bee.PositionX >= 0 && bee.PositionY < 0){
+            return 1/(1+Math.abs(bee.PositionX - bee.PositionY));
+        } else if (bee.PositionX < 0 && bee.PositionY >= 0){
+            return 1/(1+Math.abs(bee.PositionX - bee.PositionY));
         } else {
-            return 1 + Math.abs(bee.PositionX + bee.PositionY);
+            return 1/(1+Math.abs(bee.PositionX + bee.PositionY));
         }
     }
 
@@ -78,8 +99,8 @@ window.onload = () => {
     let Init = () => {
         for(let i=0;i<employed.length;i++) {
             employed[i] = new Bee();
-            employed[i].PositionX = Math.random() * width;
-            employed[i].PositionY = Math.random() * height;
+            employed[i].PositionX = lBoundryX + Math.random() * (uBoundryX - lBoundryX);
+            employed[i].PositionY = lBoundryY + Math.random() * (uBoundryY - lBoundryY);
             employed[i].Nectar = FitnessFunction(employed[i]);
 
             scout[i] = 0;
@@ -101,13 +122,13 @@ window.onload = () => {
             
             phi = -a + ((a + a) * Math.random());
             tmpBee.PositionX = employed[i].PositionX + ( phi*( employed[i].PositionX - employed[k].PositionX ) );
-            if(tmpBee.PositionX < 0) tmpBee.PositionX = 0;
-            if(tmpBee.PositionX > width) tmpBee.PositionX = width;
+            if(tmpBee.PositionX < lBoundryX) tmpBee.PositionX = lBoundryX;
+            if(tmpBee.PositionX > uBoundryX) tmpBee.PositionX = uBoundryX;
         
             phi = -a + ((a + a) * Math.random());
             tmpBee.PositionY = employed[i].PositionY + ( phi*( employed[i].PositionY - employed[k].PositionY ) );
-            if(tmpBee.PositionY < 0) tmpBee.PositionY = 0;
-            if(tmpBee.PositionY > height) tmpBee.PositionY = height;
+            if(tmpBee.PositionY < lBoundryY) tmpBee.PositionY = lBoundryY;
+            if(tmpBee.PositionY > uBoundryY) tmpBee.PositionY = uBoundryY;
         
             tmpBee.Nectar = FitnessFunction(tmpBee);
             if(tmpBee.Nectar >= employed[i].Nectar) {
@@ -155,13 +176,13 @@ window.onload = () => {
             }
             let phi = -a + ((a + a) * Math.random());
             onlooker[i].PositionX = onlooker[i].PositionX + ( phi*( onlooker[i].PositionX - employed[k].PositionX ) );
-            if(onlooker[i].PositionX < 0) onlooker[i].PositionX = 0;
-            if(onlooker[i].PositionX > width) onlooker[i].PositionX = width;
+            if(onlooker[i].PositionX < lBoundryX) onlooker[i].PositionX = lBoundryX;
+            if(onlooker[i].PositionX > uBoundryX) onlooker[i].PositionX = uBoundryX;
         
             phi = -a + ((a + a) * Math.random());
             onlooker[i].PositionY = onlooker[i].PositionY + ( phi*( onlooker[i].PositionY - employed[k].PositionY ) );
-            if(onlooker[i].PositionY < 0) onlooker[i].PositionY = 0;
-            if(onlooker[i].PositionY > height) onlooker[i].PositionY = height;
+            if(onlooker[i].PositionY < lBoundryY) onlooker[i].PositionY = lBoundryY;
+            if(onlooker[i].PositionY > uBoundryY) onlooker[i].PositionY = uBoundryY;
         
             onlooker[i].Nectar = FitnessFunction(onlooker[i]);
 
@@ -173,8 +194,8 @@ window.onload = () => {
     let ScoutPhase = () => {
         for(let i=0;i<scout.length;i++) {
             if(scout[i] >= employedChances){
-                employed[i].PositionX = Math.random() * width;
-                employed[i].PositionY = Math.random() * height;
+                employed[i].PositionX = lBoundryX + Math.random() * (uBoundryX - lBoundryX);
+                employed[i].PositionY = lBoundryY + Math.random() * (uBoundryY - lBoundryY);
                 employed[i].Nectar = FitnessFunction(employed[i]);
                 scout[i] = 0;
             }
@@ -209,10 +230,10 @@ window.onload = () => {
             employedChances = 10;
         }
         a = parseFloat(document.getElementById("aNumber").value);
-        if (a == NaN) {
+        if (isNaN(a)) {
             a = 1;
         }
-        console.log(employedChances);
+        console.log(a);
         globalBestSolutionX = Infinity;
         globalBestSolutionY = Infinity;
         Init();
@@ -229,7 +250,8 @@ window.onload = () => {
 
         if(timer >= beeSpeed){
             if(isRunning && maxIteration > 0){
-                ctx.clearRect(0,0,width,height);
+                ctx.clearRect(lBoundryX,lBoundryY,width,height);
+                DrawLines();
                 EmployedPhase();
                 OnlookerPhase();
                 UpdateGlobalPhase();
@@ -247,7 +269,7 @@ window.onload = () => {
     animationId = document.getElementById("resetBtn").onclick = Reset;
 
 
-
+    ctx.translate(width/2,height/2);
     Init();
     window.requestAnimationFrame(Update);
     //setInterval( Update, 500);
