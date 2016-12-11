@@ -111,22 +111,25 @@ window.onload = () => {
     let EmployedPhase = () => {
         for(let i=0;i<employed.length;i++) {
 
-            // wybór k różnego od i
-            let k = Math.floor(Math.random() * population);
-            while(i==k) {
-                k = Math.floor(Math.random() * population);
-            }
             
+            // wybór pozycji w sąsiedztwie
+            let neighbourhoodX,neighbourhoodY;
+            do{
+                neighbourhoodX = lBoundryX + Math.random() * (uBoundryX - lBoundryX);
+            }while(neighbourhoodX == employed[i].PositionX);
+            do{
+                neighbourhoodY = lBoundryY + Math.random() * (uBoundryY - lBoundryY);
+            }while(neighbourhoodY == employed[i].PositionY);
+
             let tmpBee = new Bee();
-            let phi;
             
-            phi = -a + ((a + a) * Math.random());
-            tmpBee.PositionX = employed[i].PositionX + ( phi*( employed[i].PositionX - employed[k].PositionX ) );
+            let phi = -a + ((a + a) * Math.random());
+            tmpBee.PositionX = employed[i].PositionX + ( phi*( employed[i].PositionX - neighbourhoodX ) );
             if(tmpBee.PositionX < lBoundryX) tmpBee.PositionX = lBoundryX;
             if(tmpBee.PositionX > uBoundryX) tmpBee.PositionX = uBoundryX;
         
             phi = -a + ((a + a) * Math.random());
-            tmpBee.PositionY = employed[i].PositionY + ( phi*( employed[i].PositionY - employed[k].PositionY ) );
+            tmpBee.PositionY = employed[i].PositionY + ( phi*( employed[i].PositionY - neighbourhoodY ) );
             if(tmpBee.PositionY < lBoundryY) tmpBee.PositionY = lBoundryY;
             if(tmpBee.PositionY > uBoundryY) tmpBee.PositionY = uBoundryY;
         
