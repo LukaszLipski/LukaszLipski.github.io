@@ -196,7 +196,8 @@ window.onload = () => {
         recruter = Array(0);
         recruterProb = Array(0);
         uncommited = Array(0);
-        indexOfHigestNectar = 0;
+        indexOfHigestNectar = 0,
+        indexOfLowestNectar = 0,
         maxIteration = document.getElementById("maxIteration").value;
         if(maxIteration == ""){
             maxIteration = 100;

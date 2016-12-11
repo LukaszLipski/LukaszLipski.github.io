@@ -236,7 +236,7 @@ window.onload = () => {
         if (isNaN(a)) {
             a = 1;
         }
-        console.log(a);
+        
         globalBestSolutionX = Infinity;
         globalBestSolutionY = Infinity;
         Init();

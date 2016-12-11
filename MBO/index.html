@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Bee Colony Optimization</title>
+    <title>Marriage in Honey-Bees Optimization</title>
     <link href="http://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.97.8/css/materialize.min.css">
     <script type="text/javascript" src="https://code.jquery.com/jquery-2.1.1.min.js"></script>
@@ -29,11 +29,13 @@
 
                 <br>
                 <hr>
-                <p class="range-field"><label>Population<input type="range" id="populationNumber" min="0" max="100" value="20"/></label></p>
+                <p class="range-field"><label>Queens<input type="range" id="populationNumber" min="0" max="100" value="20"/></label></p>
 
                 <div class="input-field"><input id="maxIteration" type="number" class="validate" min="0"><label for="maxIteration">Max Iteration</label></div>
-                <div class="input-field"><input id="velocity" type="number" class="validate" min="0"><label for="velocity">Velocity</label></div>
-                <!--<div class="input-field"><input id="aNumber" type="number" step="0.1" min="0" class="validate"><label for="disabled">aNumber</label></div>-->
+                <div class="input-field"><input id="speed" type="number" class="validate" min="0"><label for="speed">Speed</label></div>
+                <div class="input-field"><input id="alpha" type="number" step="0.1" min="0" max="1" class="validate"><label for="alpha">Alpha parameter</label></div>
+                <div class="input-field"><input id="spermathecaSize" type="number" class="validate" min="0"><label for="spermathecaSize">Spermatheca size</label></div>
+                <div class="input-field"><input id="step" type="number" class="validate" min="0"><label for="step">Decline of energy</label></div>
 
                 <button class="btn waves-effect waves-light" id="resetBtn">Reset</button>
 
