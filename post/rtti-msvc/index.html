@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+<meta name="HandheldFriendly" content="True" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta http-equiv="Cache-Control" content="no-transform" />
+<meta http-equiv="Cache-Control" content="no-siteapp" />
+<meta name="generator" content="Hugo 0.82.1" />
+
+
+
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="msapplication-TileColor" content="#da532c">
+<meta name="theme-color" content="#ffffff">
+
+
+<title>RTTI Internals in MSVC - Lukasz Lipski</title>
+
+
+<meta name="author" content="Lukasz Lipski" />
+
+
+<meta name="description" content="Internals of the RTTI on Windows using MSVC" />
+
+
+<meta name="keywords" content="C&#43;&#43;, RTTI, MSVC" />
+
+
+<meta property="og:title" content="RTTI Internals in MSVC" />
+<meta name="twitter:title" content="RTTI Internals in MSVC" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://lukaszlipski.dev/post/rtti-msvc/" /><meta property="og:description" content="Internals of the RTTI on Windows using MSVC" />
+<meta name="twitter:description" content="Internals of the RTTI on Windows using MSVC" /><meta property="og:image" content="https://lukaszlipski.dev/img/og.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:image" content="https://lukaszlipski.dev/img/og.png" /><meta property="article:published_time" content="2021-05-06T00:00:00+00:00" /><meta property="article:modified_time" content="2021-05-06T00:00:00+00:00" />
+
+
+<style>
+    @media (prefers-color-scheme: dark) {
+        body[data-theme='auto'] img {
+            filter: brightness(60%);
+        }
+    }
+
+    body[data-theme='dark'] img {
+        filter: brightness(60%);
+    }
+</style>
+
+
+
+<link rel="stylesheet" href="https://lukaszlipski.dev/assets/css/fuji.min.css" />
+
+
+
+
+
+</head>
+
+<body data-theme="auto">
+    <script data-cfasync="false">
+  
+  var fujiThemeData = localStorage.getItem('fuji_data-theme');
+  
+  if (!fujiThemeData) {
+    localStorage.setItem('fuji_data-theme', 'auto');
+  } else {
+    
+    if (fujiThemeData !== 'auto') {
+      document.body.setAttribute('data-theme', fujiThemeData === 'dark' ? 'dark' : 'light');
+    }
+  }
+</script>
+    <header>
+    <div class="container-lg clearfix">
+        <div class="col-12 header">
+            <a class="title-main" href="https://lukaszlipski.dev/">Lukasz Lipski</a>
+            
+            <span class="title-sub">Going deep into the rabbit hole</span>
+            
+        </div>
+    </div>
+</header>
+
+    <main>
+        <div class="container-lg clearfix">
+            
+            <div class="col-12 col-md-9 float-left content">
+                
+<article>
+    
+    <h2 class="post-item post-title">
+        <a href="https://lukaszlipski.dev/post/rtti-msvc/">RTTI Internals in MSVC</a>
+    </h2>
+    <div class="post-item post-meta">
+        <span><i class="iconfont icon-today-sharp"></i>&nbsp;2021-05-06</span>
+
+<span><i class="iconfont icon-file-tray-sharp"></i>&nbsp;2227 words</span>
+<span><i class="iconfont icon-time-sharp"></i>&nbsp;11 minutes</span>
+<span><i class="iconfont icon-pricetags-sharp"></i>&nbsp;<a href="/tags/c&#43;&#43;">C&#43;&#43;</a>&nbsp;<a href="/tags/rtti">RTTI</a>&nbsp;<a href="/tags/msvc">MSVC</a>&nbsp;</span>
+
+    </div>
+    
+    <div class="post-content markdown-body">
+        <p>In this article, I&rsquo;d like to explain how MSVC handles the Run-Time Type Information (RTTI).
+In C++, RTTI can be used by dynamic_cast, typeid or exception handling. I won&rsquo;t go into details about each of the mentioned use cases but rather I&rsquo;ll focus on MSVC implementation of the RTTI.</p>
+<p>For this article, I&rsquo;m going to assume x64 architecture is used. The x32 doesn&rsquo;t differ much when compared to x64, but to keep things more compact I decided to focus only on the more relevant architecture.</p>
+<p>The RTTI data is generated for polymorphic types. This means we need to add at least one virtual function to a struct/class for the compiler to generate the data that we can inspect. The RTTI data is going to be placed in the .rdata section of the application.</p>
+<p>Let&rsquo;s take a look at what happens when we have this example:</p>
+<pre><code class="language-C++">struct ParentA
+{
+    virtual ~ParentA() = default;
+};
+
+struct ParentB
+{
+    virtual ~ParentB() = default;
+};
+
+struct SomeClass : ParentA, ParentB
+{
+    virtual ~SomeClass() = default;
+    virtual int getNum() { return 2; }
+};
+
+int main()
+{
+    ParentB* obj = new SomeClass;
+
+    delete obj;
+}
+</code></pre>
+<p>By using an undocumented compiler&rsquo;s switch <code>/d1reportSingleClassLayoutSomeClass</code> (you can read more about it <a href="https://ofekshilon.com/2010/11/07/d1reportallclasslayout-dumping-object-memory-layout/" target="_blank">here</a>), we can inspect the SomeClass' layout:</p>
+<pre><code>    class SomeClass   size(16):
+      +---
+     0    | +--- (base class ParentA)
+     0    | | {vfptr}
+      | +---
+     8    | +--- (base class ParentB)
+     8    | | {vfptr}
+      | +---
+      +---
+    SomeClass::$vftable@ParentA@:
+      | &amp;SomeClass_meta
+      |  0
+     0    | &amp;SomeClass::{dtor}
+     1    | &amp;SomeClass::getNum
+    SomeClass::$vftable@ParentB@:
+      | -8
+     0    | &amp;thunk: this-=8; goto SomeClass::{dtor}
+</code></pre>
+<p>As we can see, the SomeClass' instance will contain two <code>vfptr</code> entries. The <code>vfptr</code> is a pointer to <abbr title="Virtual Function Table"><code>vftable</code></abbr> which contains virtual function pointers. The first <code>vfptr</code> is going to be shared with the <code>ParentA</code> sub-object, while the next one is part of the <code>ParentB</code> sub-object.</p>
+<p>Here you can see how the layout looks like when represented by a simple diagram:</p>
+<pre><code>                               vftable
+                           +--------------+
+                       +--&gt;|  thunk dtor  |  0
+                       |   +--------------+ 
+                       |   |     meta     | -8
+                       |   +--------------+
+                       |
+ SomeClass' instance   |       vftable
+  +---------------+    |   +--------------+
+8 |     vfptr     +----+   |    getNum    |  8
+  +---------------+        +--------------+ 
+0 |     vfptr     +-------&gt;|     dtor     |  0
+  +---------------+        +--------------+ 
+                           |     meta     | -8
+                           +--------------+
+</code></pre>
+<p>You might start wondering, what is this <code>meta</code> field below the first <code>vftable</code> entry. Now, we&rsquo;re getting into the MSVC ABI&rsquo;s specific approach to handle the RTTI. The <code>meta</code> field is a pointer to the <code>RTTICompleteObjectLocator</code> which, as the name suggests, helps us to locate the complete object. In simple terms, the complete object is the object that we&rsquo;ve created, in this case, it&rsquo;s an instance of SomeClass. The sub-objects are ParentA and ParentB which are part of the complete object.</p>
+<blockquote>
+<p>One thing that can be unclear is, what exactly is this <code>thunk dtor</code>. This is a small piece of code that adjusts <em>this</em> pointer, in this example by -8, before jumping to a specified function, in this case, SomeClass' destructor. This is necessary because SomeClass' functions, during their execution, expect <em>this</em> pointer to point at the beginning of the SomeClass' object. Here is how <code>thunk dtor</code> looks like in assembly:</p>
+</blockquote>
+<pre><code>sub rcx,8  
+jmp SomeClass::`scalar deleting destructor'
+</code></pre>
+<blockquote>
+<p><em>scalar deleting destructor</em> is a MSVC way to combine descructor with an <em>operatior delete</em>. If you&rsquo;re interested to know more, you can read about it <a href="https://ofekshilon.com/2014/06/09/on-vector-deleting-destructors-and-some-newdelete-internals/" target="_blank">here</a>.</p>
+</blockquote>
+<h2 id="rtticompleteobjectlocator">RTTICompleteObjectLocator</h2>
+<p>We know now that the <code>meta</code> field points to <code>RTTICompleteObjectLocator</code>. Let&rsquo;s take a peek at how this structure is defined in the code:</p>
+<pre><code class="language-C++">typedef const struct _s_RTTICompleteObjectLocator    
+{
+    unsigned long signature;
+    unsigned long offset;
+    unsigned long cdOffset;
+    int           pTypeDescriptor;
+    int           pClassDescriptor;
+    int           pSelf;
+} _RTTICompleteObjectLocator;
+</code></pre>
+<ol>
+<li><code>signature</code> for x64 is set to <code>COL_SIG_REV1</code> which means <code>pTypeDescriptor</code>, <code>pClassDescriptor</code> and <code>pSelf</code> are going to be image base relative offsets.</li>
+<li><code>offset</code> is the offset from the complete object to the current sub-object from which we&rsquo;ve taken <code>RTTICompleteObjectLocator</code>.</li>
+<li><code>cdOffset</code> is the constructor displacement&rsquo;s offset. It&rsquo;s relevant only in particular situations when using virtual inheritance. This is Microsoft&rsquo;s specific way to optimize data generation needed to handle some cases when virtual inheritance is used. I won&rsquo;t go into details about it in this article but if you&rsquo;re curious to know more, I&rsquo;ve prepared a simple <a href="https://godbolt.org/z/1z64jb6Wb" target="_blank">example</a> as well as you can check <a href="http://www.rdos.net/svn/tags/V9.2.5/watcom/bld/plusplus/notes/layout.txt" target="_blank">this</a> document which I found on the internet.</li>
+<li><code>pTypeDescriptor</code> contains the offset from the image base to complete the object&rsquo;s <code>TypeDescriptor</code>.</li>
+<li><code>pClassDescriptor</code> contains the offset from the image base to <code>RTTIClassHierarchyDescriptor</code>.</li>
+<li><code>pSelf</code> contains the offset from image base to the current <code>RTTICompleteObjectLocator</code>. This gives us a simple way to get the image base which we can use to get <code>pTypeDescriptor</code> and <code>pClassDescriptor</code>.</li>
+</ol>
+<p>Given all that, we need to understand what is the <code>TypeDescriptor</code> and <code>RTTIClassHierarchyDescriptor</code> to have the full picture.</p>
+<h2 id="typedescriptor">TypeDescriptor</h2>
+<p>Let&rsquo;s take a look at the <code>TypeDescriptor</code> definition first:</p>
+<pre><code class="language-C++">typedef struct TypeDescriptor
+{
+    const void* pVFTable;
+    void*       spare;          
+    char        name[];
+} TypeDescriptor;
+</code></pre>
+<ol>
+<li><code>pVFTable</code> points to <code>type_info</code>&rsquo;s vftable.</li>
+<li><code>spare</code> is an unused field. Currently, it&rsquo;s always set to <em>nullptr</em>.</li>
+<li><code>name</code> contains mangled type&rsquo;s name. The returned value equals what we get when we call <em>raw_name()</em> on the <code>type_info</code> instance.</li>
+</ol>
+<p>Now it&rsquo;s a good time to recap what we&rsquo;ve gathered so far. We can go through <code>meta</code> field in <code>vftable</code> to <code>RTTICompleteObjectLocator</code>. From there we can get <code>TypeDescriptor</code> by using <code>RTTICompleteObjectLocator</code>&rsquo;s <code>pTypeDescriptor</code> field.
+We should be able to get the mangled name of the complete object&rsquo;s type in this overcomplicated way, Yay!</p>
+<p>Here is a small extension to the simple program presented earlier:</p>
+<pre><code class="language-C++">// Get the meta entry in vftable
+_RTTICompleteObjectLocator* col = reinterpret_cast&lt;_RTTICompleteObjectLocator***&gt;(obj)[0][-1];
+
+// Calculate image base by subtracting the RTTICompleteObjectLocator's pSelf offset from RTTICompleteObjectLocator's pointer
+uintptr_t imageBase = reinterpret_cast&lt;uintptr_t&gt;(col) - col-&gt;pSelf;
+
+// Get the type descriptor by adding TypeDescriptor's offset to the image base
+TypeDescriptor* tDesc = reinterpret_cast&lt;TypeDescriptor*&gt;(imageBase + col-&gt;pTypeDescriptor);
+
+// At the end, we can get the type's mangled name
+const char* colName = tDesc-&gt;name;
+</code></pre>
+<p>In order to get the access to all definitions such as <code>RTTICompleteObjectLocator</code> or <code>TypeDescriptor</code>, you&rsquo;ll have to include <code>&lt;ehdata.h&gt;</code> and <code>&lt;rttidata.h&gt;</code>.</p>
+<h2 id="rtticlasshierarchydescriptor">RTTIClassHierarchyDescriptor</h2>
+<p>Here&rsquo;s how <code>RTTIClassHierarchyDescriptor</code>&rsquo;s definition looks like:</p>
+<pre><code class="language-C++">typedef const struct _s_RTTIClassHierarchyDescriptor {
+    unsigned long signature;
+    unsigned long attributes;
+    unsigned long numBaseClasses;
+    int           pBaseClassArray;
+} _RTTIClassHierarchyDescriptor;
+</code></pre>
+<ol>
+<li><code>signature</code> is currently always set to <em>0</em>.</li>
+<li><code>attributes</code> is a bitfield. Possible values are:
+<ul>
+<li><code>CHD_MULTINH</code> - set when hierarchy contains multiple inheritance.</li>
+<li><code>CHD_VIRTINH</code> - set when hierarchy contains at least one virtual base.</li>
+<li><code>CHD_AMBIGUOUS</code> - set when the current type contains an ambiguous base class.</li>
+</ul>
+</li>
+<li><code>numBaseClasses</code> is the number of <code>RTTIBaseClassDescriptor</code> entries inside <code>RTTIBaseClassArray</code>.</li>
+<li><code>pBaseClassArray</code> is the image base relative offset to <code>RTTIBaseClassArray</code>.</li>
+</ol>
+<p>Next, let&rsquo;s check <code>RTTIBaseClassDescriptor</code> and <code>RTTIBaseClassArray</code>:</p>
+<pre><code class="language-C++">typedef const struct _s_RTTIBaseClassArray {
+    int arrayOfBaseClassDescriptors[];
+} _RTTIBaseClassArray;
+</code></pre>
+<ol>
+<li><code>arrayOfBaseClassDescriptors</code> holds the array of image base relative offsets to one or more <code>RTTIBaseClassDescriptor</code>s. As the name suggests, the array holds information about base classes except for the first element which describes the complete object type.</li>
+</ol>
+<pre><code class="language-C++">typedef const struct _s_RTTIBaseClassDescriptor {
+    int           pTypeDescriptor;
+    unsigned long numContainedBases;
+    PMD           where;
+    unsigned long attributes;
+    int           pClassDescriptor;
+} _RTTIBaseClassDescriptor;
+</code></pre>
+<ol>
+<li><code>pTypeDescriptor</code> is the type descriptor for the currently processed type within the class hierarchy.</li>
+<li><code>numContainedBases</code> has the number of bases for the current type.</li>
+<li><code>where</code> is an additional, inlined structure of type <code>PMD</code> which I&rsquo;ll describe later.</li>
+<li><code>attributes</code> is a bitfield. Possible values are:
+<ul>
+<li>BCD_NOTVISIBLE - set when the current base class is not inherited publicly.</li>
+<li>BCD_AMBIGUOUS - current base class is ambiguous in the class hierarchy.</li>
+<li>BCD_PRIVORPROTBASE - current base class is inherited privately.</li>
+<li>BCD_PRIVORPROTINCOMPOBJ - part of a privately inherited base class hierarchy.</li>
+<li>BCD_VBOFCONTOBJ - current base class is virtually inherited.</li>
+<li>BCD_NONPOLYMORPHIC - the name suggests that it should be set for a non-polymorphic base class. However, during my research, I wasn&rsquo;t able to create a scenario where this bit would be set :C.</li>
+<li>BCD_HASPCHD - indicates that <code>RTTIClassHierarchyDescriptor</code> is present for current type and <code>pClassDescriptor</code> contains valid offset.</li>
+</ul>
+</li>
+<li><code>pClassDescriptor</code> contains the image base relative offset to the <code>RTTIClassHierarchyDescriptor</code> for the current type.</li>
+</ol>
+<pre><code class="language-C++">typedef struct PMD
+{
+    int mdisp;
+    int pdisp;
+    int vdisp;
+} PMD;
+</code></pre>
+<ol>
+<li><code>mdisp</code> is the offset to the current sub-object, relative to the complete object.</li>
+<li><code>pdisp</code> is the offset to <code>vbptr</code>. Keep in mind that <code>vbptr</code> is not the same as <code>vfptr</code>. <code>vbptr</code> is a pointer to the additional table called <abbr title="Virtual Base Table"><code>vbtable</code></abbr> used with virtual inheritance. It is necessary to locate the virtual bases. If virtual inheritance is not used, this will hold a value of <em>-1</em>.</li>
+<li><code>vdisp</code> is the offset within <code>vbtable</code>. If virtual inheritance is not used, this will hold a value of <em>0</em>.</li>
+</ol>
+<p>Whew, that&rsquo;s a lot of information. It might be hard to grasp all connections using only struct definitions so I&rsquo;ve prepared this diagram which depicts our simple example:</p>
+<span style="font-size:0.7em;">
+<pre><code>                                                                                          SomeClass'                                                 
+                                                                                    RTTIBaseClassDescriptor                                          
+                                                                               +------------------+                                                  
+                 +-----------------------------------------------------------  | pClassDescriptor |                                                  
+                 |                                                             +------------------+-------------+                SomeClass'          
+                 |                                                             |    attributes    | BCD_HASPCHD |              TypeDescriptor        
+                 |                                                             +------------------+-------------+      +----------+-----------------+
+                 v                                                             |      where       | (0, -1, 0)  |      |   name   | .?AUSomeClass@@ |
+            SomeClass'                        SomeClass'                       +------------------+-------------+      +----------+-----------------+
+   RTTIClassHierarchyDescriptor           RTTIBaseClassArray                   |numContainedBases |      2      |      |  spare   |                  
+ +---------------+                  +-----------------------------+            +------------------+-------------+      +----------+                  
+ |pBaseClassArray|-----------------&gt;| arrayOfBaseClassDescriptors |-----------&gt;| pTypeDescriptor  |-------------------&gt;| pVFTable |                  
+ +---------------+-------------+    +-----------------------------+            +------------------+                    +----------+                  
+ |numBaseClasses |      3      |    |            ...              |------+                                                                           
+ +---------------+-------------+    +-----------------------------+      |           ParentA in SomeClass                                            
+ |  attributes   | CHD_MULTINH |    |            ...              |--+   |          RTTIBaseClassDescriptor                                          
+ +---------------+-------------+    +-----------------------------+  |   |     +------------------+                                                  
+ |   signature   |      0      |                                     |   |     | pClassDescriptor |                                                  
+ +---------------+-------------+                                     |   |     +------------------+-------------+                ParentA's           
+                                                                     |   |     |    attributes    | BCD_HASPCHD |              TypeDescriptor        
+                                                                     |   |     +------------------+-------------+      +----------+-----------------+
+                                                                     |   |     |      where       | (0, -1, 0)  |      |   name   |  .?AUParentA@@  |
+                                                                     |   |     +------------------+-------------+      +----------+-----------------+
+                                                                     |   |     |numContainedBases |      0      |      |  spare   |                  
+                                                                     |   |     +------------------+-------------+      +----------+                  
+                                                                     |   +----&gt;| pTypeDescriptor  |-------------------&gt;| pVFTable |                  
+                                                                     |         +------------------+                    +----------+                  
+                                                                     |                                                                               
+                                                                     |                ParentB in SomeClass                                           
+                                                                     |              RTTIBaseClassDescriptor                                          
+                                                                     |         +------------------+                                                  
+                                                                     |         | pClassDescriptor |                                                  
+                                                                     |         +------------------+-------------+                ParentB's           
+                                                                     |         |    attributes    | BCD_HASPCHD |              TypeDescriptor        
+                                                                     |         +------------------+-------------+      +----------+-----------------+
+                                                                     +--------&gt;|      where       | (8, -1, 0)  |      |   name   |  .?AUParentB@@  |
+                                                                               +------------------+-------------+      +----------+-----------------+
+                                                                               |numContainedBases |      0      |      |  spare   |                  
+                                                                               +------------------+-------------+      +----------+                  
+                                                                               | pTypeDescriptor  |-------------------&gt;| pVFTable |                  
+                                                                               +------------------+                    +----------+                  
+</code></pre>
+</span>
+<p>By looking at the SomeClass' <code>RTTIClassHierarchyDescriptor</code>, we can see that it describes three classes and the attribute points out that we deal with multi inheritance. The <code>RTTIBaseClassArray</code> starts with our complete object which has 2 bases described next. The first <code>ParentA</code> at offset <em>0</em> and the third, <code>ParentB</code> at offset <em>8</em>. At each entry, we also have an access to <code>TypeDescriptor</code> which gives us the access to mangled names.</p>
+<h2 id="important-note">Important note</h2>
+<p>You might assume that having a pointer to a polymorphic type&rsquo;s instance will always have a first entry <code>vfptr</code>. However, it&rsquo;s not always the case in MSVC. When using a virtual inheritance, a complete object&rsquo;s <code>vfptr</code> is merged with a virtual base class when no virtual function is introduced.
+Consider this simple example:</p>
+<pre><code class="language-C++">struct VParent
+{
+    virtual ~VParent() = default;
+    int a = 0xDEADC0DE;
+};
+
+struct VSomeClass : virtual VParent
+{
+    virtual ~VSomeClass() = default;
+    int b = 0xBADDCAFE;
+};
+</code></pre>
+<p>There&rsquo;s one virtual function, the destructor which is overridden by the child. The VSomeClass doesn&rsquo;t introduce any new virtual function. The layout for <code>VSomeClass</code> is presented below:</p>
+<pre><code>class VSomeClass  size(32):
+  +---
+ 0    | {vbptr}
+ 8    | b
+      | &lt;alignment member&gt; (size=4)
+  +---
+  +--- (virtual base VParent)
+16    | {vfptr}
+24    | a
+      | &lt;alignment member&gt; (size=4)
+  +---
+</code></pre>
+<p>Here&rsquo;s the same layout represented as a simple diagram:</p>
+<pre><code>       VSomeClass          
+   +--------+-------+  
+24 |   a    |   -   |  
+   +--------+-------+  
+16 |      vfptr     | 
+   +----------------+  
+ 8 |   b    |   -   |  
+   +--------+-------+  
+ 0 |      vbptr     |  
+   +----------------+  
+</code></pre>
+<p>As presented above, the first entry is <code>vbptr</code>, not <code>vfptr</code>. That&rsquo;d create an issue when assuming <code>vfptr</code> is always the first entry. Where <code>vfptr</code> is going to end up depends on the whole object layout.</p>
+<p>Does that mean we can&rsquo;t write the generic code to access RTTI? It so happens that we can do a little trick with <code>vbtable</code>.</p>
+<p>The first entry of <code>vbtable</code> is the offset from <code>vbptr</code> to the beginning of the complete object. After that, we have a series of offsets from the <code>vbptr</code> to the nth virtual base.</p>
+<pre><code>             ...          
+   +---------------------+
+16 |  virtualBaseOffset  |
+   +---------------------+
+ 0 |      topOffset      |
+   +---------------------+
+</code></pre>
+<p>If the <code>topOffset</code> is <em>0</em>, we deal with the case where the first entry is <code>vbptr</code>. We can add the first virtual base offset to the current pointer where we&rsquo;re going to have an access to the <code>vfptr</code>.
+Otherwise, if the offset is different than <em>0</em>, we&rsquo;ve actually accessed first entry of the <code>vftable</code> which contains some virtual function pointer.</p>
+<p>Keep in mind that this is going to work only with polymorphic types. Here&rsquo;s how it&rsquo;d look like in the code:</p>
+<pre><code class="language-C++">#pragma warning (push)
+#pragma warning (disable:4200) // Allow an array with variable length
+struct vbtable
+{
+    int topOffset;
+    int virtualBaseOffsets[];
+};
+#pragma warning (pop)
+
+int main()
+{
+    ...
+
+    // Some check to see if the type is polymorphic
+
+    ...
+
+    // Assume that the first entry is vbtable
+    vbtable* virtualBaseTable = reinterpret_cast&lt;vbtable**&gt;(obj)[0];
+
+    // If the offset equals 0 then we can add the first virtual base offset, otherwise, we already point at vfptr.
+    if (virtualBaseTable-&gt;topOffset == 0)
+        objAddr += virtualBaseTable-&gt;virtualBaseOffsets[0];
+
+    ...
+}
+</code></pre>
+<h2 id="final-words">Final words</h2>
+<p>By default, the compiler will generate the RTTI data. We can tell the compiler not to generate that data by using a compiler&rsquo;s switch <strong>/GR-</strong>.
+When disabled, the <code>meta</code> field contains a <em>nullptr</em>.</p>
+<p>With all that knowledge, we&rsquo;re able to get some basic information about polymorphic types in x64 applications built with MSVC. It might be useful during reverse engineering or just for a better understanding of what the compiler has to generate to properly support dynamic_cast, typeid, or exception handling.</p>
+    </div>
+</article>
+
+
+
+
+            </div>
+            <aside class="col-12 col-md-3 float-left sidebar">
+    
+    <div class="sidebar-item sidebar-pages">
+        <h3>Pages</h3>
+        <ul>
+            
+            <li>
+                <a href="/">Home</a>
+            </li>
+            
+            <li>
+                <a href="/archives/">Archives</a>
+            </li>
+            
+            <li>
+                <a href="/search/">Search</a>
+            </li>
+            
+        </ul>
+    </div>
+    
+    <div class="sidebar-item sidebar-links">
+        <h3>Links</h3>
+        <ul>
+            
+            <li>
+                <a href="https://github.com/lukaszlipski" target="_blank"><span>GitHub</span></a>
+            </li>
+            
+            <li>
+                <a href="https://www.linkedin.com/in/lukasz-lipski/" target="_blank"><span>Linkedin</span></a>
+            </li>
+            
+            <li>
+                <a href="https://www.youtube.com/channel/UCXPXJT7Kp_X3XRd04V1kubA" target="_blank"><span>YouTube</span></a>
+            </li>
+            
+        </ul>
+    </div>
+    
+    <div class="sidebar-item sidebar-tags">
+        <h3>Tags</h3>
+        <div>
+            
+            <span>
+                <a href="/tags/c&#43;&#43;/">C&#43;&#43;</a>
+            </span>
+            
+            <span>
+                <a href="/tags/msvc/">MSVC</a>
+            </span>
+            
+            <span>
+                <a href="/tags/rtti/">RTTI</a>
+            </span>
+            
+        </div>
+    </div>
+    
+</aside>
+        </div>
+        <div class="btn">
+    <div class="btn-menu" id="btn-menu">
+        <i class="iconfont icon-grid-sharp"></i>
+    </div>
+    <div class="btn-toggle-mode">
+        <i class="iconfont icon-contrast-sharp"></i>
+    </div>
+    <div class="btn-scroll-top">
+        <i class="iconfont icon-chevron-up-circle-sharp"></i>
+    </div>
+</div>
+<aside class="sidebar-mobile" style="display: none;">
+  <div class="sidebar-wrapper">
+    
+    <div class="sidebar-item sidebar-pages">
+        <h3>Pages</h3>
+        <ul>
+            
+            <li>
+                <a href="/">Home</a>
+            </li>
+            
+            <li>
+                <a href="/archives/">Archives</a>
+            </li>
+            
+            <li>
+                <a href="/search/">Search</a>
+            </li>
+            
+        </ul>
+    </div>
+    
+    <div class="sidebar-item sidebar-links">
+        <h3>Links</h3>
+        <ul>
+            
+            <li>
+                <a href="https://github.com/lukaszlipski" target="_blank"><span>GitHub</span></a>
+            </li>
+            
+            <li>
+                <a href="https://www.linkedin.com/in/lukasz-lipski/" target="_blank"><span>Linkedin</span></a>
+            </li>
+            
+            <li>
+                <a href="https://www.youtube.com/channel/UCXPXJT7Kp_X3XRd04V1kubA" target="_blank"><span>YouTube</span></a>
+            </li>
+            
+        </ul>
+    </div>
+    
+    <div class="sidebar-item sidebar-tags">
+        <h3>Tags</h3>
+        <div>
+            
+            <span>
+                <a href="/tags/c&#43;&#43;/">C&#43;&#43;</a>
+            </span>
+            
+            <span>
+                <a href="/tags/msvc/">MSVC</a>
+            </span>
+            
+            <span>
+                <a href="/tags/rtti/">RTTI</a>
+            </span>
+            
+        </div>
+    </div>
+    
+    
+    
+    
+  </div>
+</aside>
+    </main>
+
+    <footer>
+    <div class="container-lg clearfix">
+        <div class="col-12 footer">
+            
+            <span>&copy; 2021-2021
+                <a href="https://lukaszlipski.dev/">Lukasz Lipski</a>
+                
+                | Powered by <a href="https://github.com/dsrkafuu/hugo-theme-fuji/"
+                   target="_blank">Fuji-v2</a> &amp; <a href="https://gohugo.io/"
+                                                    target="_blank">Hugo</a> 
+            </span>
+        </div>
+    </div>
+</footer>
+
+    
+<script defer src="https://cdn.jsdelivr.net/npm/medium-zoom@1.0.6/dist/medium-zoom.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/lazysizes@5.3.0/lazysizes.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/prismjs@1.23.0/components/prism-core.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/prismjs@1.23.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+
+
+<script defer src="/assets/js/fuji.min.js"></script>
+
+
+</body>
+
+</html>

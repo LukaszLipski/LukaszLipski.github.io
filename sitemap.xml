@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://lukaszlipski.dev/tags/c&#43;&#43;/</loc>
+    <lastmod>2021-05-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://lukaszlipski.dev/</loc>
+    <lastmod>2021-05-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://lukaszlipski.dev/tags/msvc/</loc>
+    <lastmod>2021-05-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://lukaszlipski.dev/post/</loc>
+    <lastmod>2021-05-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://lukaszlipski.dev/tags/rtti/</loc>
+    <lastmod>2021-05-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://lukaszlipski.dev/post/rtti-msvc/</loc>
+    <lastmod>2021-05-06T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://lukaszlipski.dev/archives/</loc>
+  </url><url>
+    <loc>https://lukaszlipski.dev/search/</loc>
+  </url>
+</urlset>
